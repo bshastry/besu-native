@@ -1,0 +1,27 @@
+[package]
+name = "besu-native-arithmetic-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[features]
+raw_bytes_fuzzing = []
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.eth_arithmetic]
+package = "besu-native-arithmetic"
+path = ".."
+features = ["fuzzing-utils"]
+
+[[bin]]
+name = "modexp_fuzzer"
+path = "fuzz_targets/modexp_fuzzer.rs"
+test = false
+doc = false
+bench = false

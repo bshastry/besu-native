@@ -12,9 +12,14 @@
  */
 mod arith;
 mod mpnat;
+pub(crate) mod parsing;
+mod tests;
 
-use std::rc::Rc;
+#[cfg(any(test, feature = "fuzzing"))]
+pub mod testing;
+
 use std::io::Write;
+use std::rc::Rc;
 
 use core::{
     cmp::{min, Ordering},
@@ -26,7 +31,6 @@ pub enum RuntimeError {
     /// Input was a bad format.
     BadFormat,
 }
-
 
 #[no_mangle]
 pub extern "C" fn modexp_precompiled(
@@ -51,7 +55,6 @@ pub extern "C" fn modexp_precompiled(
     }
 }
 
-
 /// from revm - https://github.com/bluealloy/revm/blob/main/crates/revm_precompiles/src/modexp.rs
 macro_rules! read_u64_with_overflow {
     ($input:expr,$from:expr,$to:expr, $overflow_limit:expr) => {{
@@ -72,7 +75,6 @@ macro_rules! read_u64_with_overflow {
 
 /// from revm - https://github.com/bluealloy/revm/blob/main/crates/revm_precompiles/src/modexp.rs
 fn modexp_precompiled_impl(input: &[u8]) -> Rc<Vec<u8>> {
-    let len = input.len();
     let (base_len, base_overflow) = read_u64_with_overflow!(input, 0, 32, u32::MAX as usize);
     let (exp_len, exp_overflow) = read_u64_with_overflow!(input, 32, 64, u32::MAX as usize);
     let (mod_len, mod_overflow) = read_u64_with_overflow!(input, 64, 96, u32::MAX as usize);
@@ -88,23 +90,14 @@ fn modexp_precompiled_impl(input: &[u8]) -> Rc<Vec<u8>> {
     if exp_overflow {
         return Rc::new(Vec::new());
     }
-    let base_start = 96;
-    let base_end = base_start + base_len;
-    let exp_end = base_end + exp_len;
-    let mod_end = exp_end + mod_len;
 
-    let read_big = |from: usize, to: usize| {
-        let mut out = vec![0; to - from];
-        let from = min(from, len);
-        let to = min(to, len);
-        out[..to - from].copy_from_slice(&input[from..to]);
-        out
-    };
-
-    let base = read_big(base_start, base_end);
-    let exponent = read_big(base_end, exp_end);
-    let modulus = read_big(exp_end, mod_end);
-    let bytes = modexp(base.as_slice(), exponent.as_slice(), modulus.as_slice());
+    // Use shared parsing logic
+    let parsed = parsing::ParsedModExpInput::from_raw_input(input, base_len, exp_len, mod_len);
+    let bytes = modexp(
+        parsed.base.as_slice(),
+        parsed.exponent.as_slice(),
+        parsed.modulus.as_slice(),
+    );
 
     // write output to given memory, left padded and same length as the modulus.
     // always true except in the case of zero-length modulus, which leads to
@@ -132,37 +125,4 @@ pub fn modexp(base: &[u8], exp: &[u8], modulus: &[u8]) -> Vec<u8> {
     }
     let result = x.modpow(exp, &m);
     result.to_big_endian()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_modexp_precompiled() {
-        let mut output_len: u32 = 32;
-        let o_len_ptr = &mut output_len as *mut u32;
-
-        let mut input = vec![0u8; 96];
-        input[31] = 1;  // base_len = 1
-        input[63] = 1;  // exp_len = 1
-        input[95] = 1;  // mod_len = 1
-        input.push(2);  // base = 2
-        input.push(3);  // exp = 3
-        input.push(5);  // mod = 5
-
-        let input_i8: Vec<i8> = input.iter().map(|&x| x as i8).collect();
-        let mut output = vec![0i8; output_len as usize];
-
-        let result = modexp_precompiled(
-            input_i8.as_ptr(),
-            input_i8.len() as u32,
-            output.as_mut_ptr(),
-            o_len_ptr,
-        );
-
-		assert_eq!(result, 0); // Expect success
-		assert_eq!(output_len, 1); // Expect output length to be 1
-		assert_eq!(output[0], 3); // Expect output to be 3 (2^3 % 5 = 3)
-    }
 }

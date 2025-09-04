@@ -152,6 +152,9 @@ EOF
 
   cargo clean
 
+  # Run Rust tests before building
+  cargo test --release
+
   if [[ "$OSTYPE" == "darwin"* ]];  then
     lipo_lib "libeth_arithmetic" ""
   else

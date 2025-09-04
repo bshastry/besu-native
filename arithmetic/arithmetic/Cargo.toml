@@ -16,7 +16,11 @@ libc = "0.2"
 
 [lib]
 name = "eth_arithmetic"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
+# Enable fuzzing support - exposes testing utilities for fuzzers
+fuzzing = []
+# Extended validation utilities for fuzzing
+fuzzing-utils = ["fuzzing"]

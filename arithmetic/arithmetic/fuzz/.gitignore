@@ -1,0 +1,9 @@
+target
+corpus
+artifacts
+coverage
+*.profraw
+*.profdata
+crash-*
+slow-unit-*
+timeout-*
